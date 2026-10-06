@@ -1,0 +1,16 @@
+{
+  "name": "vehicle-custody",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Verifiable evidence of vehicle software updates, incident logs and battery history, signed onboard and checkable offline.",
+  "scripts": {
+    "demo": "node demo.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0",
+  "author": "Embryo Space Inc. (DBA BSVKey)"
+}
