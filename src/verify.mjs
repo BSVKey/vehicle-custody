@@ -16,7 +16,8 @@ export function verifyCampaign(c, carmakerPub) {
 //   vehicles:  registry() of onboard keys by VIN
 //   campaigns: Map campaignId -> { record, proofs: Map vin -> proof }
 //   carmakerPub, baseVersion: the version the vehicle left the factory with
-//   segments:  optional Map segment -> bytes (the log files themselves, for an incident)
+//   segments:  optional Map segment -> bytes (the log files themselves, for an incident), or
+//              -> { fingerprint, bytes } computed where the files are, so they need not be sent
 // Returns the software version timeline, the updates, the log coverage and any holes.
 export function verifyVehicle(chain, { vin, vehicles, campaigns, carmakerPub, baseVersion, segments }) {
   const problems = [];
@@ -50,9 +51,11 @@ export function verifyVehicle(chain, { vin, vehicles, campaigns, carmakerPub, ba
       if (lastLogEnd !== null && r.from < lastLogEnd) bad("log_overlap", { seq: i });
       lastLogEnd = r.to;
       if (r.kind === "vehicle.log/1" && segments) {
-        const bytes = segments.get(r.segment);
-        if (!bytes) bad("log_segment_missing", { segment: r.segment });
-        else if (fileFingerprint(bytes) !== r.fingerprint || bytes.length !== r.bytes) bad("log_segment_altered", { segment: r.segment });
+        const seg = segments.get(r.segment);
+        const fp = seg && (seg.fingerprint !== undefined ? seg.fingerprint : fileFingerprint(seg));
+        const size = seg && (seg.fingerprint !== undefined ? seg.bytes : seg.length);
+        if (!seg) bad("log_segment_missing", { segment: r.segment });
+        else if (fp !== r.fingerprint || size !== r.bytes) bad("log_segment_altered", { segment: r.segment });
       }
     }
   });

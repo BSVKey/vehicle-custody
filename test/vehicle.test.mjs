@@ -72,3 +72,11 @@ test("battery history: chained across companies, forgery caught", () => {
   const f = structuredClone(h); f[1] = batteryHandoff(genKeypair(), contentOf(h[1]));
   assert.ok(verifyBattery(f, { companies }).problems.some((p) => p.reason === "signer_not_registered_key"));
 });
+
+test("log segments can be checked from fingerprints computed where the files are", () => {
+  const f = fleet();
+  const hashes = new Map([...f.segs].map(([k, b]) => [k, { fingerprint: fileFingerprint(b), bytes: b.length }]));
+  assert.equal(verifyVehicle(f.a.chain, { vin: "VIN-A", ...f.opts, segments: hashes }).ok, true);
+  hashes.set("s1", { fingerprint: fileFingerprint(Buffer.from("seg X")), bytes: 5 });
+  assert.ok(verifyVehicle(f.a.chain, { vin: "VIN-A", ...f.opts, segments: hashes }).problems.some((p) => p.reason === "log_segment_altered"));
+});
