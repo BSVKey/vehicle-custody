@@ -13,20 +13,36 @@
 // Each vehicle's records form ONE chain (seq + prev), signed onboard as they happen and
 // uploaded whenever the vehicle is next connected. A deleted, reordered or back-dated record
 // breaks the chain.
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { signRecord } from "../lib/record.mjs";
 import { leafHash, buildTree, proof, verifyProof } from "../lib/merkle.mjs";
 
 export const fileFingerprint = (bytes) => "0x" + createHash("sha256").update(bytes).digest("hex");
-const leaf = (s) => leafHash(Buffer.from(s, "utf8"));
-
-export function commitVins(vins) {
-  const keys = [...new Set(vins)].sort();
-  const tree = buildTree(keys.map(leaf));
-  return { root: tree.root, count: keys.length, keys, tree };
+// Leaves are salted (salted-leaf/1): each item gets 16 random bytes, and leaves are ordered by
+// their salted hash. Without the salt, the sibling hashes in one item's proof could be matched
+// against guessed values to reveal the items next to it. The salt travels only in that item's
+// own proof. saltOf(key) can be supplied for reproducible commitments.
+export const LEAF_SCHEME = "salted-leaf/1";
+const SALT_RE = /^[0-9a-f]{32}$/;
+const randomSalt = () => randomBytes(16).toString("hex");
+const saltedLeaf = (salt, s) => leafHash(Buffer.from(`${salt}|${s}`, "utf8"));
+function commitSalted(keys, saltOf = randomSalt) {
+  const entries = keys.map((key) => {
+    const salt = saltOf(key);
+    if (!SALT_RE.test(salt)) throw new Error("salt must be 32 lowercase hex characters");
+    return { key, salt, leaf: saltedLeaf(salt, key) };
+  }).sort((a, b) => (a.leaf < b.leaf ? -1 : a.leaf > b.leaf ? 1 : 0));
+  const tree = buildTree(entries.map((e) => e.leaf));
+  return { root: tree.root, count: entries.length, scheme: LEAF_SCHEME, keys: entries.map((e) => e.key), salts: entries.map((e) => e.salt), tree };
 }
-export const vinProof = (c, vin) => { const i = c.keys.indexOf(vin); return i < 0 ? null : { index: i, branch: proof(c.tree, i) }; };
-export const vinTargeted = (root, count, vin, p) => !!p && p.index >= 0 && p.index < count && verifyProof(leaf(vin), p.branch, p.index, root);
+const saltedProof = (c, key) => { const i = c.keys.indexOf(key); return i < 0 ? null : { index: i, salt: c.salts[i], branch: proof(c.tree, i) }; };
+const saltedMember = (root, count, key, p) => !!p && SALT_RE.test(p.salt) && p.index >= 0 && p.index < count && verifyProof(saltedLeaf(p.salt, key), p.branch, p.index, root);
+
+export function commitVins(vins, { saltOf } = {}) {
+  return commitSalted([...new Set(vins)], saltOf);
+}
+export const vinProof = (c, vin) => saltedProof(c, vin);
+export const vinTargeted = (root, count, vin, p) => saltedMember(root, count, vin, p);
 
 export const campaign = (kp, { campaignId, carmaker, imageHash, fromVersion, toVersion, targetsRoot, targetCount, issuedAt }) =>
   signRecord(kp, { kind: "vehicle.campaign/1", campaignId, carmaker, imageHash, fromVersion, toVersion, targetsRoot, targetCount, issuedAt });

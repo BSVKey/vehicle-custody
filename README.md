@@ -45,7 +45,7 @@ All vehicles, images, logs and companies in the demo are sample data.
 
 | Record | Signed by | Says |
 |---|---|---|
-| `vehicle.campaign/1` | the carmaker | an update image (its hash), the version it moves from and to, and a Merkle root over the VINs it targets |
+| `vehicle.campaign/1` | the carmaker | an update image (its hash), the version it moves from and to, and a Merkle root over the VINs it targets (salted leaves, so one vehicle's proof does not expose the other VINs) |
 | `vehicle.update/1` | the vehicle's onboard key | received the image, verified it, installed it or rolled back, with times |
 | `vehicle.log/1` | the vehicle | a fingerprint of a closed log segment, its size and the time it covers |
 | `vehicle.gap/1` | the vehicle | the logger was offline from..to, and why |

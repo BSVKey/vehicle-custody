@@ -80,3 +80,14 @@ test("log segments can be checked from fingerprints computed where the files are
   hashes.set("s1", { fingerprint: fileFingerprint(Buffer.from("seg X")), bytes: 5 });
   assert.ok(verifyVehicle(f.a.chain, { vin: "VIN-A", ...f.opts, segments: hashes }).problems.some((p) => p.reason === "log_segment_altered"));
 });
+
+test("a VIN proof does not give away the VINs beside it", async () => {
+  const { leafHash } = await import("../lib/merkle.mjs");
+  const { commitVins, vinProof, vinTargeted } = await import("../src/records.mjs");
+  const vins = Array.from({ length: 8 }, (_, i) => `1FTBW3XM5PKA${String(10000 + i)}`);
+  const c = commitVins(vins);
+  const p = vinProof(c, vins[3]);
+  assert.equal(vins.map((v) => leafHash(Buffer.from(v, "utf8"))).includes(p.branch[0]), false);
+  assert.equal(vinTargeted(c.root, c.count, vins[3], p), true);
+  assert.equal(vinTargeted(c.root, c.count, vins[3], { ...p, salt: undefined }), false);
+});
